@@ -18,7 +18,7 @@ on:
           - RelWithDebInfo
           - Debug
       build_target:
-        description: 'Что собирать: только clickhouse (рекомендуется) или все таргеты (ninja, дольше и тяжелее)'
+        description: 'What to build: only Clickhouse (recommended) or all targets (Ninja, longer and harder)'
         required: false
         default: 'clickhouse'
         type: choice
@@ -26,7 +26,7 @@ on:
           - clickhouse
           - all
       enable_rust:
-        description: 'Собирать с поддержкой Rust-зависимостей'
+        description: 'Build with Rust-dependencies'
         required: false
         default: true
         type: boolean
@@ -40,9 +40,6 @@ env:
 
 jobs:
   build:
-    # Полная сборка очень требовательна к диску/CPU/RAM — на стандартном
-    # ubuntu-latest может не хватить ресурсов. Если есть доступ к большим
-    # раннерам (ubuntu-latest-8-cores и т.п.) или self-hosted — лучше их.
     runs-on: ubuntu-24.04
     timeout-minutes: 360
 
