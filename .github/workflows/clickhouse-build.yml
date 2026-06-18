@@ -1,0 +1,145 @@
+name: Build ClickHouse from source
+
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch / tag / commit ClickHouse для сборки'
+        required: false
+        default: 'master'
+        type: string
+      build_type:
+        description: 'CMake build type'
+        required: false
+        default: 'RelWithDebInfo'
+        type: choice
+        options:
+          - Release
+          - RelWithDebInfo
+          - Debug
+      build_target:
+        description: 'Что собирать: только clickhouse (рекомендуется) или все таргеты (ninja, дольше и тяжелее)'
+        required: false
+        default: 'clickhouse'
+        type: choice
+        options:
+          - clickhouse
+          - all
+      enable_rust:
+        description: 'Собирать с поддержкой Rust-зависимостей'
+        required: false
+        default: true
+        type: boolean
+
+env:
+  CH_REF: ${{ inputs.ref }}
+  CH_BUILD_TYPE: ${{ inputs.build_type }}
+  CH_BUILD_TARGET: ${{ inputs.build_target }}
+  RUST_NIGHTLY: nightly-2026-03-22
+  CLANG_VERSION: 21
+
+jobs:
+  build:
+    # Полная сборка очень требовательна к диску/CPU/RAM — на стандартном
+    # ubuntu-latest может не хватить ресурсов. Если есть доступ к большим
+    # раннерам (ubuntu-latest-8-cores и т.п.) или self-hosted — лучше их.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 360
+
+    steps:
+      - name: Free up disk space
+        run: |
+          echo "Disk space before cleanup:"
+          df -h /
+          sudo rm -rf /usr/share/dotnet
+          sudo rm -rf /usr/local/lib/android
+          sudo rm -rf /opt/ghc
+          sudo rm -rf /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/local/.ghcup
+          sudo docker image prune -a -f || true
+          echo "Disk space after cleanup:"
+          df -h /
+
+      - name: Checkout ClickHouse with all submodules
+        uses: actions/checkout@v4
+        with:
+          repository: ClickHouse/ClickHouse
+          ref: ${{ env.CH_REF }}
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential git cmake ccache python3 ninja-build \
+            nasm yasm gawk lsb-release wget software-properties-common gnupg
+
+      - name: Install Clang ${{ env.CLANG_VERSION }}
+        run: |
+          wget https://apt.llvm.org/llvm.sh
+          chmod +x llvm.sh
+          sudo ./llvm.sh ${{ env.CLANG_VERSION }}
+          echo "CC=clang-${{ env.CLANG_VERSION }}" >> "$GITHUB_ENV"
+          echo "CXX=clang++-${{ env.CLANG_VERSION }}" >> "$GITHUB_ENV"
+
+      - name: Install Rust toolchain
+        if: ${{ inputs.enable_rust }}
+        run: |
+          curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | \
+            sh -s -- -y --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.cargo/bin:$PATH"
+          rustup toolchain install "$RUST_NIGHTLY"
+          rustup default "$RUST_NIGHTLY"
+          rustup component add rust-src
+
+      - name: Cache ccache directory
+        uses: actions/cache@v4
+        with:
+          path: ~/.ccache
+          key: ccache-${{ runner.os }}-${{ env.CH_REF }}-${{ github.sha }}
+          restore-keys: |
+            ccache-${{ runner.os }}-${{ env.CH_REF }}-
+            ccache-${{ runner.os }}-
+
+      - name: Configure ccache size limit
+        run: ccache -M 5G
+
+      - name: Configure build (CMake + Ninja)
+        run: |
+          mkdir -p build
+          cd build
+          cmake -G Ninja \
+            -D CMAKE_BUILD_TYPE="${CH_BUILD_TYPE}" \
+            -D ENABLE_RUST=${{ inputs.enable_rust && 'ON' || 'OFF' }} \
+            ..
+
+      - name: Build ClickHouse
+        run: |
+          cd build
+          if [ "${CH_BUILD_TARGET}" = "all" ]; then
+            ninja
+          else
+            ninja clickhouse
+          fi
+
+      - name: Show ccache stats
+        run: ccache -s
+
+      - name: Smoke test the binary
+        run: |
+          ./build/programs/clickhouse local --query "SELECT version()"
+
+      - name: Package binary
+        run: |
+          cd build/programs
+          tar -czf clickhouse-binary.tar.gz clickhouse
+
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: clickhouse-binary-${{ env.CH_BUILD_TYPE }}
+          path: build/programs/clickhouse-binary.tar.gz
+          retention-days: 7
+          if-no-files-found: error
