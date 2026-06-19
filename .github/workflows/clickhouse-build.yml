@@ -58,7 +58,7 @@ jobs:
           df -h /
 
       - name: Checkout ClickHouse with all submodules
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6.0.3
         with:
           repository: ClickHouse/ClickHouse
           ref: ${{ env.CH_REF }}
@@ -92,7 +92,7 @@ jobs:
           rustup component add rust-src
 
       - name: Cache ccache directory
-        uses: actions/cache@v4
+        uses: actions/cache@v5.0.5
         with:
           path: ~/.ccache
           key: ccache-${{ runner.os }}-${{ env.CH_REF }}-${{ github.sha }}
@@ -134,7 +134,7 @@ jobs:
           tar -czf clickhouse-binary.tar.gz clickhouse
 
       - name: Upload build artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7.0.1
         with:
           name: clickhouse-binary-${{ env.CH_BUILD_TYPE }}
           path: build/programs/clickhouse-binary.tar.gz
