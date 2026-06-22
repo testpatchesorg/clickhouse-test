@@ -44,18 +44,16 @@ jobs:
     timeout-minutes: 360
 
     steps:
-      - name: Free up disk space
-        run: |
-          echo "Disk space before cleanup:"
-          df -h /
-          sudo rm -rf /usr/share/dotnet
-          sudo rm -rf /usr/local/lib/android
-          sudo rm -rf /opt/ghc
-          sudo rm -rf /opt/hostedtoolcache/CodeQL
-          sudo rm -rf /usr/local/.ghcup
-          sudo docker image prune -a -f || true
-          echo "Disk space after cleanup:"
-          df -h /
+      - name: Free Disk Space (Ubuntu)
+        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
+        with:
+          tool-cache: true
+          android: true
+          dotnet: true
+          haskell: true
+          large-packages: true
+          docker-images: true
+          swap-storage: true
 
       - name: Checkout ClickHouse with all submodules
         uses: actions/checkout@v6.0.3
@@ -91,17 +89,14 @@ jobs:
           rustup default "$RUST_NIGHTLY"
           rustup component add rust-src
 
-      - name: Cache ccache directory
+      - name: Cache build directory
         uses: actions/cache@v5.0.5
         with:
-          path: ~/.ccache
-          key: ccache-${{ runner.os }}-${{ env.CH_REF }}-${{ github.sha }}
+          path: ${{ github.workspace }}/build
+          key: build-cache-${{ runner.os }}-${{ env.CH_REF }}-${{ github.sha }}
           restore-keys: |
             ccache-${{ runner.os }}-${{ env.CH_REF }}-
             ccache-${{ runner.os }}-
-
-      - name: Configure ccache size limit
-        run: ccache -M 5G
 
       - name: Configure build (CMake + Ninja)
         run: |
@@ -120,9 +115,6 @@ jobs:
           else
             ninja clickhouse
           fi
-
-      - name: Show ccache stats
-        run: ccache -s
 
       - name: Smoke test the binary
         run: |
