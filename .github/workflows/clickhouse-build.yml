@@ -104,6 +104,7 @@ jobs:
         run: |
           mkdir -p build
           cd build
+          rm -f CMakeCache.txt
           cmake -G Ninja \
             -D CMAKE_BUILD_TYPE="${CH_BUILD_TYPE}" \
             -D ENABLE_RUST=${{ inputs.enable_rust && 'ON' || 'OFF' }} \
