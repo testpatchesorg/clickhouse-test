@@ -104,7 +104,10 @@ jobs:
         run: |
           mkdir -p build
           cd build
-          rm -f CMakeCache.txt
+          if [ -f CMakeCache.txt ]; then
+            old_build=$(grep "# For build in directory: " CMakeCache.txt | cut -d ":" -f2 | sed "s/ //")
+            sed -i "s#$old_build#$PWD#g" CMakeCache.txt
+          fi
           cmake -G Ninja \
             -D CMAKE_BUILD_TYPE="${CH_BUILD_TYPE}" \
             -D ENABLE_RUST=${{ inputs.enable_rust && 'ON' || 'OFF' }} \
