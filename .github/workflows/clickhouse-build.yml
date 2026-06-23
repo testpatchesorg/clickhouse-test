@@ -106,7 +106,10 @@ jobs:
           cd build
           if [ -f CMakeCache.txt ]; then
             old_build=$(grep "# For build in directory: " CMakeCache.txt | cut -d ":" -f2 | sed "s/ //")
+            echo "[DEBUG] old_build=$old_build"
+            echo "[DEBUG] PWD=$PWD"
             sed -i "s#$old_build#$PWD#g" CMakeCache.txt
+            cat CMakeCache.txt
           fi
           cmake -G Ninja \
             -D CMAKE_BUILD_TYPE="${CH_BUILD_TYPE}" \
